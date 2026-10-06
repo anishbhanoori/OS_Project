@@ -1,83 +1,66 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
-#include <sys/wait.h>
+
+#define MAX_INPUT 100
 
 int main() {
+    char input[MAX_INPUT];
 
-    int pipefd[2];
+    while (1) {
+        // Display shell prompt
+        printf("shellforge> ");
+        fflush(stdout);
 
-    // Create pipe
-    if (pipe(pipefd) == -1) {
-        perror("pipe");
-        return 1;
+        // Read command
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            break;
+        }
+
+        // Remove newline
+        input[strcspn(input, "\n")] = '\0';
+
+        // Exit command
+        if (strcmp(input, "exit") == 0) {
+            printf("Exiting ShellForge...\n");
+            break;
+        }
+
+        // Built-in cd command
+        if (strncmp(input, "cd ", 3) == 0) {
+
+            // Extract directory name
+            char *directory = input + 3;
+
+            // Change directory
+            if (chdir(directory) == 0) {
+                printf("Directory changed to: %s\n", directory);
+            } else {
+                perror("cd");
+            }
+
+            continue;
+        }
+
+        // Handle "cd" without argument
+        if (strcmp(input, "cd") == 0) {
+            char *home = getenv("HOME");
+
+            if (home != NULL) {
+                if (chdir(home) == 0) {
+                    printf("Changed to home directory: %s\n", home);
+                } else {
+                    perror("cd");
+                }
+            }
+
+            continue;
+        }
+
+        // Unknown command
+        printf("Unknown command: %s\n", input);
     }
-
-    // Create first child
-    pid_t pid1 = fork();
-
-    if (pid1 == -1) {
-        perror("fork");
-        return 1;
-    }
-
-    if (pid1 == 0) {
-
-        // Child 1: ls
-
-        // Close unused read end
-        close(pipefd[0]);
-
-        // Redirect stdout to pipe
-        dup2(pipefd[1], STDOUT_FILENO);
-
-        // Close original write descriptor
-        close(pipefd[1]);
-
-        // Execute ls
-        execlp("ls", "ls", NULL);
-
-        // If execlp fails
-        perror("execlp");
-        exit(1);
-    }
-
-    // Create second child
-    pid_t pid2 = fork();
-
-    if (pid2 == -1) {
-        perror("fork");
-        return 1;
-    }
-
-    if (pid2 == 0) {
-
-        // Child 2: wc -l
-
-        // Close unused write end
-        close(pipefd[1]);
-
-        // Redirect stdin from pipe
-        dup2(pipefd[0], STDIN_FILENO);
-
-        // Close original read descriptor
-        close(pipefd[0]);
-
-        // Execute wc -l
-        execlp("wc", "wc", "-l", NULL);
-
-        // If execlp fails
-        perror("execlp");
-        exit(1);
-    }
-
-    // Parent does not use the pipe
-    close(pipefd[0]);
-    close(pipefd[1]);
-
-    // Wait for both children
-    waitpid(pid1, NULL, 0);
-    waitpid(pid2, NULL, 0);
 
     return 0;
 }
